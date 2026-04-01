@@ -2,32 +2,27 @@
 
 ## Project Summary
 
-In this project you will build and explain a small music recommender system.
+This repo simulates a **content-based** music recommender: each song in a CSV is scored against a small “taste profile” (favorite genre and mood, target energy, and whether the listener prefers acoustic textures). The highest-scoring tracks are ranked as the top recommendations. Explanations list which rules fired (genre match, mood match, energy similarity, acoustic preference), so the pipeline is easy to audit—unlike opaque production systems that blend collaborative and deep models.
 
-Your goal is to:
-
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
-
-Replace this paragraph with your own summary of what your version does.
+The CLI (`python3 -m src.main`) loads the catalog, then runs several example profiles so you can compare outputs side by side.
 
 ---
 
 ## How The System Works
 
-Explain your design in plain language.
+**Features per song (from `data/songs.csv`):** `id`, `title`, `artist`, `genre`, `mood`, `energy` (0–1), `tempo_bpm`, `valence`, `danceability`, and `acousticness`. Only **genre, mood, energy, acousticness** feed the score today; the other columns are available for future rules.
 
-Some prompts to answer:
+**User profile:** `favorite_genre`, `favorite_mood`, `target_energy`, and `likes_acoustic`. The functions also accept shorthand keys (`genre`, `mood`, `energy`) for quick experiments.
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+**Algorithm recipe (ranking rule):**
 
-You can include a simple diagram or bullet list if helpful.
+1. For **every** song, run `score_song` (the scoring rule for one track).
+2. Sum weighted parts: **+2.0** if genre matches, **+1.0** if mood matches.
+3. Add **energy similarity**: \(1 - |\"\"song_energy - target_energy|\"\) scaled by **1.5**.
+4. Add **acoustic alignment**: if the user likes acoustic music, reward high `acousticness`; otherwise reward lower `acousticness` (weight **0.5**).
+5. Sort all songs by total score (highest first), break ties by title, return the top **k**.
+
+The object-oriented `Recommender` class uses the **same** `score_song` logic as the functional `recommend_songs` path, so tests and CLI stay in sync.
 
 ---
 
@@ -44,9 +39,9 @@ You can include a simple diagram or bullet list if helpful.
 
 2. Install dependencies
 
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 3. Run the app:
 
@@ -68,144 +63,34 @@ You can add more tests in `tests/test_recommender.py`.
 
 ## Experiments You Tried
 
-Use this section to document the experiments you ran. For example:
-
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+- **Weight shift (energy vs genre):** In `src/recommender.py`, baseline weights are `WEIGHT_GENRE = 2.0` and `WEIGHT_ENERGY_SIMILARITY = 1.5`. Temporarily setting `WEIGHT_ENERGY_SIMILARITY` to **3.0** (and re-running `python3 -m src.main`) makes energy alignment matter more: high-energy tracks move up when genre and mood matches are tied or missing, which can **override** a weaker genre signal for ambiguous profiles.
+- **Mood removed (mental / code experiment):** Commenting out the mood-match block in `score_song` would collapse “happy” vs “sad” pop tracks to the same genre tier, so **Gym Hero** and **Sunrise City** would separate mainly on energy and acoustic lean—illustrating how dropping a feature hides emotional nuance.
 
 ---
 
 ## Limitations and Risks
 
-Summarize some limitations of your recommender.
+- Tiny, hand-made catalog; genres like `indie pop` do not exactly match `pop`, so some good fits get zero genre points.
+- No collaborative filtering (no “users like you”), no audio or lyrics, no diversity penalty—so one artist or vibe can dominate the top k.
+- Edge moods (e.g. `sad`) are rare; the model can fall back to **genre + energy**, which looks “accurate” but ignores sadness the user asked for.
 
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-You will go deeper on this in your model card.
+See [model_card.md](model_card.md) for bias and evaluation detail.
 
 ---
 
 ## Reflection
 
-Read and complete `model_card.md`:
+Recommenders are mostly **transparent ranking**: features plus weights produce a score, and small weight changes swing who wins. Real apps add feedback loops (skips, repeats) that can amplify mainstream genres—similar to how our genre gate rewards exact string matches.
 
-[**Model Card**](model_card.md)
+Pairwise profile comparisons and “what changed, why” notes live in [reflection.md](reflection.md). The full model documentation is in [**Model Card**](model_card.md).
 
-Write 1 to 2 paragraphs here about what you learned:
-
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
+### Terminal screenshots (course submission)
 
 
----
+![Lo-fi](img/lofi.png)
 
-## 7. `model_card_template.md`
+![high energy](img/high_energy.png)
 
-Combines reflection and model card framing from the Module 3 guidance. :contentReference[oaicite:2]{index=2}  
+![Deep intense Rock](img/deep_intense_Rock.png)
 
-```markdown
-# 🎧 Model Card - Music Recommender Simulation
-
-## 1. Model Name
-
-Give your recommender a name, for example:
-
-> VibeFinder 1.0
-
----
-
-## 2. Intended Use
-
-- What is this system trying to do
-- Who is it for
-
-Example:
-
-> This model suggests 3 to 5 songs from a small catalog based on a user's preferred genre, mood, and energy level. It is for classroom exploration only, not for real users.
-
----
-
-## 3. How It Works (Short Explanation)
-
-Describe your scoring logic in plain language.
-
-- What features of each song does it consider
-- What information about the user does it use
-- How does it turn those into a number
-
-Try to avoid code in this section, treat it like an explanation to a non programmer.
-
----
-
-## 4. Data
-
-Describe your dataset.
-
-- How many songs are in `data/songs.csv`
-- Did you add or remove any songs
-- What kinds of genres or moods are represented
-- Whose taste does this data mostly reflect
-
----
-
-## 5. Strengths
-
-Where does your recommender work well
-
-You can think about:
-- Situations where the top results "felt right"
-- Particular user profiles it served well
-- Simplicity or transparency benefits
-
----
-
-## 6. Limitations and Bias
-
-Where does your recommender struggle
-
-Some prompts:
-- Does it ignore some genres or moods
-- Does it treat all users as if they have the same taste shape
-- Is it biased toward high energy or one genre by default
-- How could this be unfair if used in a real product
-
----
-
-## 7. Evaluation
-
-How did you check your system
-
-Examples:
-- You tried multiple user profiles and wrote down whether the results matched your expectations
-- You compared your simulation to what a real app like Spotify or YouTube tends to recommend
-- You wrote tests for your scoring logic
-
-You do not need a numeric metric, but if you used one, explain what it measures.
-
----
-
-## 8. Future Work
-
-If you had more time, how would you improve this recommender
-
-Examples:
-
-- Add support for multiple users and "group vibe" recommendations
-- Balance diversity of songs instead of always picking the closest match
-- Use more features, like tempo ranges or lyric themes
-
----
-
-## 9. Personal Reflection
-
-A few sentences about what you learned:
-
-- What surprised you about how your system behaved
-- How did building this change how you think about real music recommenders
-- Where do you think human judgment still matters, even if the model seems "smart"
-
+![Edge Case](img/edge_case.png)
